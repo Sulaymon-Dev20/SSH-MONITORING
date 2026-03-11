@@ -1,4 +1,3 @@
-```bash
 #!/bin/bash
 
 set -e
@@ -307,4 +306,3 @@ echo "Version   : $VERSION"
 echo "Cron      : every 30 minutes"
 echo "Backup    : $SSH_BACKUP"
 echo -e "${RESET}"
-```
