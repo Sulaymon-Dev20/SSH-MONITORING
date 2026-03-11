@@ -1,3 +1,4 @@
+```bash
 #!/bin/bash
 
 set -e
@@ -55,9 +56,7 @@ while kill -0 $pid 2>/dev/null; do
 
 dots="$dots."
 
-if [ ${#dots} -gt 3 ]; then
-dots="."
-fi
+[ ${#dots} -gt 3 ] && dots="."
 
 echo -ne "\r⏳ $msg$dots "
 sleep 0.5
@@ -77,7 +76,7 @@ fi
 }
 
 ########################################
-# ROOT CHECK
+# HEADER
 ########################################
 
 clear
@@ -87,9 +86,69 @@ echo "   SSH MONITORING INSTALLER"
 echo "======================================="
 echo -e "${RESET}"
 
+########################################
+# ROOT CHECK
+########################################
+
 [ "$EUID" -ne 0 ] && fail "Run this installer as root or sudo"
 
 success "Root permission confirmed"
+
+########################################
+# BACKEND API CONFIG
+########################################
+
+echo
+info "Enter backend API URL:"
+read -r API_URL
+
+[ -z "$API_URL" ] && fail "API URL cannot be empty"
+
+[[ "$API_URL" =~ ^https?:// ]] || fail "Invalid API URL format"
+
+info "Testing API connectivity..."
+
+HTTP_STATUS=$(curl -s --connect-timeout 5 --max-time 10 \
+-o /dev/null -w "%{http_code}" "$API_URL")
+
+if [[ "$HTTP_STATUS" =~ ^2|3 ]]; then
+success "API is reachable ($HTTP_STATUS)"
+else
+fail "API check failed (HTTP $HTTP_STATUS)"
+fi
+
+########################################
+# INSTALL ASCIINEMA
+########################################
+
+if ! command -v asciinema >/dev/null 2>&1; then
+
+info "Installing asciinema..."
+
+if command -v apt >/dev/null; then
+
+run_with_loader "Updating package list" apt update
+run_with_loader "Installing asciinema" apt install -y asciinema
+
+elif command -v yum >/dev/null; then
+
+run_with_loader "Installing asciinema" yum install -y asciinema
+
+elif command -v dnf >/dev/null; then
+
+run_with_loader "Installing asciinema" dnf install -y asciinema
+
+else
+
+warn "Unsupported package manager, skipping asciinema install"
+
+fi
+
+else
+
+success "asciinema already installed"
+
+fi
 
 ########################################
 # FETCH VERSIONS
@@ -146,13 +205,7 @@ select ACTION in "Overwrite existing ForceCommand" "Remove existing ForceCommand
 
 case $REPLY in
 
-1)
-sed -i '/^ForceCommand/d' "$SSH_CONFIG"
-success "Existing ForceCommand removed"
-break
-;;
-
-2)
+1|2)
 sed -i '/^ForceCommand/d' "$SSH_CONFIG"
 success "ForceCommand cleared"
 break
@@ -205,6 +258,13 @@ curl -L "$BASE_URL/banner.txt" -o "$BANNER_FILE"
 chmod 644 "$BANNER_FILE"
 
 ########################################
+# CONFIGURE API IN CRON SCRIPT
+########################################
+
+run_with_loader "Injecting API URL into cron script" \
+sed -i "s|API_URL=.*|API_URL=\"$API_URL\"|" "$CRON_FILE"
+
+########################################
 # CRON JOB
 ########################################
 
@@ -247,3 +307,4 @@ echo "Version   : $VERSION"
 echo "Cron      : every 30 minutes"
 echo "Backup    : $SSH_BACKUP"
 echo -e "${RESET}"
+```
